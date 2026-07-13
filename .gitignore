@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+
+# Regenerable: COCO128 auto-downloads via ultralytics val(), val logs are just run artifacts
+datasets/
+runs/

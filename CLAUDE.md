@@ -1,16 +1,16 @@
-# Project: Edge AI Optimization Benchmark (YOLOv11n on Raspberry Pi)
+# Project: Edge AI Optimization Benchmark (YOLOv11n on Raspberry Pi 5)
 
 ## Goal
-Benchmark YOLOv11n object detection across model formats on this Raspberry Pi
-and produce a GitHub-ready write-up. Target CV line:
+Benchmark YOLOv11n object detection across model formats on this Raspberry
+Pi 5 and produce a GitHub-ready write-up. Target CV line:
 "Benchmarked YOLOv11n across PyTorch, ONNX, NCNN and INT8 TFLite on Raspberry
-Pi, achieving Nx speedup with X% mAP retention."
+Pi 5, achieving Nx speedup with X% mAP retention."
 
 The deliverable is the comparison (speed + accuracy + write-up), not a new model.
 Use pretrained COCO weights (yolo11n.pt). Do NOT train anything.
 
 ## Hardware & environment constraints (hard rules)
-- This machine is a Raspberry Pi running Ubuntu, ARM64, limited RAM. Treat it
+- This machine is a Raspberry Pi 5 running Ubuntu, ARM64, limited RAM. Treat it
   as a constrained device at all times.
 - NEVER install full TensorFlow on this Pi. TFLite INT8 export happens in
   Google Colab; only `tflite-runtime` may be installed here for inference.

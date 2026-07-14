@@ -47,7 +47,7 @@ def main():
 
     ax.set_ylabel("Frames per second", color=INK_SECONDARY, fontsize=10)
     ax.set_title(
-        "YOLOv11n inference speed by format (Raspberry Pi, 640px)",
+        "YOLOv11n inference speed by format (Raspberry Pi 5, 640px)",
         color=INK_PRIMARY, fontsize=12, pad=14, loc="left",
     )
 

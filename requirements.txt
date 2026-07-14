@@ -1,0 +1,9 @@
+# Pi 5 / Python 3.12 (aarch64). ai-edge-litert is used for TFLite inference
+# instead of tflite-runtime or full tensorflow -- tflite-runtime has no py3.12
+# wheel, and full tensorflow is too heavy to install on-device (see README).
+ultralytics>=8.4.92
+opencv-python-headless>=4.6.0
+matplotlib>=3.11.0
+onnxruntime>=1.27.0
+ncnn>=1.0.20260526
+ai-edge-litert>=2.1.6

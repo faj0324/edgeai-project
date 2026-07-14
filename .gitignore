@@ -1,6 +1,13 @@
 __pycache__/
 *.pyc
+*.egg-info/
+build/
+dist/
 
 # Regenerable: COCO128 auto-downloads via ultralytics val(), val logs are just run artifacts
 datasets/
 runs/
+
+# Default output dir for `yolo-pi-bench benchmark` -- regenerable, doesn't
+# replace the checked-in results.md/accuracy.md/sweep.md and their charts
+bench_out/

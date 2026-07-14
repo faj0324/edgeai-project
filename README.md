@@ -13,34 +13,84 @@ benchmarked below. Phase 3 (TFLite INT8) is complete.**
 - 4-core CPU, no GPU/NPU acceleration used
 - CPU temperature logged before/after each format to catch thermal throttling
 
+## Install
+
+```
+python -m venv .venv && source .venv/bin/activate
+pip install -e .
+```
+
+Or `pip install -r requirements.txt` to run from source without installing
+the package. Either way, TFLite inference goes through `ai-edge-litert` —
+`tflite-runtime` has no Python 3.12 wheel, and full TensorFlow is too heavy
+to install on the Pi, so neither is ever installed here (see requirements.txt).
+
+## Usage
+
+```
+yolo-pi-bench benchmark yolo11n.pt --source test.mp4
+```
+
+Benchmarks whichever of PyTorch/ONNX/NCNN/TFLite INT8 it finds next to
+`yolo11n.pt` (see Method for the naming convention) at 640px, 200 timed
+frames with a 20-frame warmup and a 30s inter-format cooldown, then writes
+`bench_out/report.md`, `bench_out/fps_chart.png`, and
+`bench_out/speed_results.csv` / `accuracy_results.csv`.
+
+Useful flags:
+- `--imgsz 320` — inference size (NCNN/TFLite are shape-locked to whatever
+  size they were exported at — see `yolo-pi-bench export` and the
+  shape-lock note under Method)
+- `--formats pytorch,ncnn` — only benchmark formats you've exported
+- `--skip-accuracy` — speed only, skips the slower COCO128 `val()` pass
+- `--outdir results/` — default is `bench_out/`
+
+`yolo-pi-bench export yolo11n.pt --imgsz 320` exports ONNX + NCNN locally.
+TFLite INT8 isn't exportable this way — it needs full TensorFlow, done off-Pi
+(see Method step 4); point `--tflite-path` at the copied-back file instead.
+
+Run `yolo-pi-bench benchmark --help` / `yolo-pi-bench export --help` for the
+full flag list.
+
 ## Method
 
-1. `export_models.py` converts `yolo11n.pt` to ONNX and NCNN using Ultralytics'
-   built-in exporters, run directly on the Pi.
-2. `benchmark.py` loads a fixed set of video frames into memory once (so disk
-   I/O doesn't pollute timing), runs a 20-frame warmup per format, then times
-   200 inference calls per format at 640px. A 30-second cooldown separates
-   formats so later formats aren't penalized by heat carried over from earlier
-   ones. TFLite inference is forced to `num_threads=4` (Ultralytics' LiteRT
-   backend otherwise defaults to 1 thread, leaving 3 of the Pi 5's 4 cores
-   idle — see `litert_num_threads()` in `benchmark.py`).
-3. `accuracy.py` runs Ultralytics' standard `val()` on COCO128 for each format
-   and records mAP50-95, mAP50, precision, and recall.
+1. `yolo-pi-bench export yolo11n.pt` converts `yolo11n.pt` to ONNX and NCNN
+   using Ultralytics' built-in exporters, run directly on the Pi.
+2. `yolo-pi-bench benchmark` loads a fixed set of video frames into memory
+   once (so disk I/O doesn't pollute timing), runs a 20-frame warmup per
+   format, then times 200 inference calls per format at 640px. A 30-second
+   cooldown separates formats so later formats aren't penalized by heat
+   carried over from earlier ones. TFLite inference is forced to
+   `num_threads=4` (Ultralytics' LiteRT backend otherwise defaults to 1
+   thread, leaving 3 of the Pi 5's 4 cores idle — see `litert_num_threads()`
+   in `src/yolo_pi_bench/speed.py`).
+3. The same `benchmark` run also calls Ultralytics' standard `val()` on
+   COCO128 for each format and records mAP50-95, mAP50, precision, and
+   recall (skip with `--skip-accuracy`).
 4. TFLite INT8: exported in Google Colab (`YOLO("yolo11n.pt").export(format="tflite",
    int8=True)`, calibrated on COCO128) since full TensorFlow is too heavy to
    install on the Pi. The resulting `yolo11n_int8.tflite` was copied back and
    run here through `ai-edge-litert` (the actively maintained successor to
    `tflite-runtime`, published for Python 3.12/aarch64) — no full TensorFlow
    was installed on the Pi, per the project's hardware constraints.
-5. Test video: a 54-second, 768x432, 12fps clip containing people, bicycles,
+5. NCNN and TFLite bake the input shape into the exported graph — feeding a
+   mismatched imgsz to a fixed-shape NCNN model doesn't raise a clean error,
+   it corrupts memory and crashes the process. `yolo-pi-bench` handles this
+   by resolving NCNN's path as `{model}_ncnn_model_{imgsz}` for any imgsz
+   other than 640 (its default export size), so a sweep across sizes needs
+   one `yolo-pi-bench export --imgsz N` per size first; TFLite INT8 is only
+   attempted at 640 (its one Colab export) unless `--tflite-path` overrides it.
+6. Test video: a 54-second, 768x432, 12fps clip containing people, bicycles,
    and cars (public sample footage, not recorded on this Pi — swap in your own
-   `test.mp4` and re-run `benchmark.py` to reproduce with different footage).
+   `test.mp4` and re-run `yolo-pi-bench benchmark` to reproduce with different
+   footage).
 
-Everything here is reproducible: `python export_models.py`, then
-`python benchmark.py --source test.mp4`, then `python accuracy.py`. The
-imgsz sweep is `python benchmark.py --sweep --source test.mp4`, then
-`python make_sweep_chart.py` (needs `yolo11n_ncnn_model_320/` and `_480/`,
-see Method above).
+Everything here is reproducible:
+`yolo-pi-bench export yolo11n.pt`, then
+`yolo-pi-bench benchmark yolo11n.pt --source test.mp4`. The results below
+were captured with this tool's predecessor (flat scripts, since folded into
+this CLI) in one continuous session; re-running with the same flags should
+reproduce them within normal run-to-run/thermal variance.
 
 ## Results: inference speed
 
@@ -90,9 +140,10 @@ need active cooling or a duty cycle.
 
 ![FPS vs input size](sweep_chart.png)
 
-`benchmark.py --sweep` benchmarks NCNN at imgsz 320/480/640 — nearly 3x
-faster at 320 than 640, the expected roughly-quadratic cost of processing a
-larger input. TFLite INT8 only appears at 640: both NCNN and TFLite bake the
+This sweep is `yolo-pi-bench benchmark yolo11n.pt --imgsz N --formats ncnn`
+run once per size, against the per-size NCNN exports below — NCNN is nearly
+3x faster at 320 than 640, the expected roughly-quadratic cost of processing
+a larger input. TFLite INT8 only appears at 640: both NCNN and TFLite bake the
 input shape into the exported graph rather than tolerating a resize at
 inference time like PyTorch/ONNX/TFLite-with-dynamic-shapes do, so feeding a
 mismatched imgsz to a fixed-shape NCNN model doesn't raise a clean error —
@@ -150,14 +201,20 @@ on tight box localization probably can't.
 
 ## Files
 
-- `benchmark.py` — speed benchmark across formats, writes `results.csv`/`results.md`;
-  `--sweep` mode writes `sweep.csv`/`sweep.md`
-- `export_models.py` — ONNX + NCNN export (640px)
-- `accuracy.py` — COCO128 mAP validation across formats, writes `accuracy.csv`/`accuracy.md`
-- `make_chart.py` — builds `fps_chart.png` from `results.csv`
-- `make_sweep_chart.py` — builds `sweep_chart.png` from `sweep.csv`
+- `src/yolo_pi_bench/` — the `yolo-pi-bench` CLI package
+  - `cli.py` — argparse entry point, `benchmark` and `export` subcommands
+  - `formats.py` — format labels/colors and model-path resolution by naming convention
+  - `speed.py` — FPS benchmark (frame loading, warmup/timing, the LiteRT thread-count fix)
+  - `accuracy.py` — COCO128 mAP validation across formats
+  - `chart.py` — builds the FPS bar chart (matplotlib, `Agg` backend)
+  - `report.py` — writes the CSVs and the markdown report
+- `pyproject.toml` / `requirements.txt` — package metadata and pinned dependencies
+- `results.md` / `results.csv`, `accuracy.md` / `accuracy.csv`, `sweep.md` / `sweep.csv`,
+  `fps_chart.png`, `sweep_chart.png` — the checked-in results below, from the run described
+  in Method; `yolo-pi-bench benchmark` writes fresh runs to `bench_out/` (gitignored) instead
+  of overwriting these
 - `test.mp4` — test video used for speed benchmarking
 - `yolo11n.pt` — pretrained COCO weights (not trained/fine-tuned here)
-- `yolo11n.onnx` / `yolo11n_ncnn_model/` — exported by `export_models.py` on the Pi (640px)
+- `yolo11n.onnx` / `yolo11n_ncnn_model/` — exported with `yolo-pi-bench export` on the Pi (640px)
 - `yolo11n_ncnn_model_320/` / `_480/` — NCNN exports at those imgsz, for the sweep only
 - `yolo11n_int8.tflite` — INT8 export, done in Google Colab (not on the Pi) and copied in

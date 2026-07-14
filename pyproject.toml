@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yolo-pi-bench"
+version = "0.1.0"
+description = "CLI benchmark tool for YOLOv11n inference speed and accuracy across PyTorch/ONNX/NCNN/TFLite on Raspberry Pi 5"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "ultralytics>=8.4.92",
+    "opencv-python-headless>=4.6.0",
+    "matplotlib>=3.11.0",
+    "onnxruntime>=1.27.0",
+    "ncnn>=1.0.20260526",
+    "ai-edge-litert>=2.1.6",
+]
+
+[project.scripts]
+yolo-pi-bench = "yolo_pi_bench.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
